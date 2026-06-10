@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Victoria Line Branch Predictor</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 20px;
+      background: #111;
+      color: #fff;
+    }
+    button {
+      padding: 14px 20px;
+      font-size: 16px;
+      border-radius: 12px;
+      border: none;
+      margin: 10px 0;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 14px;
+      background: #222;
+      border-radius: 12px;
+    }
+    .big {
+      font-size: 26px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Victoria Line Predictor</h1>
+
+  <p>
+    This app uses your iPhone motion sensors to predict whether the train
+    takes the left or right track between Stockwell and Brixton.
+  </p>
+
+  <button id="startBtn">Enable Motion Sensors</button>
+  <button id="recordBtn">Start Recording</button>
+  <button id="predictBtn">Predict Branch</button>
+
+  <div id="status">
+    <div class="big" id="prediction">Waiting...</div>
+    <div id="details"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

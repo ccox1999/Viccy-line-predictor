@@ -1,0 +1,10 @@
+
+{
+  "name": "Victoria Line Predictor",
+  "short_name": "TubePredictor",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "start_url": "./",
+  "icons": []
+}
