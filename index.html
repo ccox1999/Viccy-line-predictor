@@ -20,7 +20,6 @@
       </p>
     </header>
 
-    <!-- ✅ REQUIRED: status block (this fixes your crash) -->
     <section class="card status-card">
       <div class="status-header">
         <div class="status-title">Session status</div>
@@ -70,29 +69,32 @@
 
         <div class="chart-legend icon-legend">
 
+          <!-- AX (side-to-side) -->
           <div class="legend-item ax">
             <svg viewBox="0 0 40 40">
-              <rect x="17" y="6" width="6" height="28" rx="3"/>
-              <line x1="8" y1="20" x2="17" y2="20"/>
-              <line x1="32" y1="20" x2="23" y2="20"/>
-              <polyline points="10,18 8,20 10,22"/>
-              <polyline points="30,18 32,20 30,22"/>
+              <rect x="18" y="6" width="4" height="28" rx="2"/>
+              <line x1="10" y1="20" x2="18" y2="20"/>
+              <line x1="30" y1="20" x2="22" y2="20"/>
+              <polyline points="12,18 10,20 12,22"/>
+              <polyline points="28,18 30,20 28,22"/>
             </svg>
           </div>
 
+          <!-- AY (up/down) -->
           <div class="legend-item ay">
             <svg viewBox="0 0 40 40">
-              <rect x="17" y="6" width="6" height="28" rx="3"/>
-              <line x1="20" y1="8" x2="20" y2="16"/>
-              <line x1="20" y1="32" x2="20" y2="24"/>
-              <polyline points="18,10 20,8 22,10"/>
-              <polyline points="18,30 20,32 22,30"/>
+              <rect x="18" y="6" width="4" height="28" rx="2"/>
+              <line x1="20" y1="10" x2="20" y2="16"/>
+              <line x1="20" y1="30" x2="20" y2="24"/>
+              <polyline points="18,12 20,10 22,12"/>
+              <polyline points="18,28 20,30 22,28"/>
             </svg>
           </div>
 
+          <!-- AZ (in/out screen) -->
           <div class="legend-item az">
             <svg viewBox="0 0 40 40">
-              <rect x="18" y="8" width="4" height="24" rx="2"/>
+              <rect x="19" y="8" width="2" height="24" rx="1"/>
               <polygon points="20,6 17,12 23,12"/>
               <polygon points="20,34 17,28 23,28"/>
             </svg>
@@ -111,25 +113,28 @@
 
         <div class="chart-legend icon-legend">
 
+          <!-- ALPHA (twist) -->
           <div class="legend-item alpha">
             <svg viewBox="0 0 40 40">
-              <rect x="17" y="6" width="6" height="28" rx="3"/>
-              <path d="M10 20a10 10 0 0 1 20 0"/>
-              <polyline points="26,14 30,18 24,18"/>
+              <rect x="18" y="6" width="4" height="28" rx="2"/>
+              <path d="M12 20a8 8 0 0 1 16 0"/>
+              <polyline points="24,16 28,18 24,20"/>
             </svg>
           </div>
 
+          <!-- BETA (tilt) -->
           <div class="legend-item beta">
             <svg viewBox="0 0 40 40">
-              <rect x="17" y="6" width="6" height="28" rx="3"/>
-              <polyline points="14,12 20,6 26,12"/>
+              <rect x="18" y="6" width="4" height="28" rx="2"/>
+              <polyline points="14,14 20,8 26,14"/>
             </svg>
           </div>
 
+          <!-- GAMMA (roll) -->
           <div class="legend-item gamma">
             <svg viewBox="0 0 40 40">
-              <rect x="17" y="6" width="6" height="28" rx="3"/>
-              <path d="M12 14Q20 8 28 14"/>
+              <rect x="18" y="6" width="4" height="28" rx="2"/>
+              <path d="M14 16Q20 10 26 16"/>
             </svg>
           </div>
 
