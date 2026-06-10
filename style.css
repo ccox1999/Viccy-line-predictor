@@ -32,6 +32,8 @@ body {
   padding: 16px;
 }
 
+/* Header */
+
 .app-header h1 {
   margin: 0;
   font-size: 22px;
@@ -43,6 +45,8 @@ body {
   color: var(--text-muted);
 }
 
+/* Cards */
+
 .card {
   background: var(--card-bg);
   border-radius: 18px;
@@ -50,6 +54,8 @@ body {
   margin-top: 14px;
   border: 1px solid var(--border);
 }
+
+/* Controls */
 
 .controls-row {
   display: flex;
@@ -114,22 +120,23 @@ body {
   height: 100%;
 }
 
-/* ✅ FIX — apply styling to ALL SVG shapes */
+/* ✅ CRITICAL FIX: apply proper styling to all SVG shapes */
 .legend-item svg * {
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.6;          /* thinner = more iOS-like */
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
 }
 
-/* ✅ FIX — Z axis arrows need fill */
+/* ✅ Z-axis arrows need to be filled triangles */
 .legend-item.az polygon {
   fill: currentColor;
   stroke: none;
 }
 
-/* Colours */
+/* Colours mapping to graph lines */
+
 .legend-item.ax { color: var(--ax); }
 .legend-item.ay { color: var(--ay); }
 .legend-item.az { color: var(--az); }
@@ -138,6 +145,8 @@ body {
 .legend-item.beta { color: var(--beta); }
 .legend-item.gamma { color: var(--gamma); }
 
+/* Canvas */
+
 canvas {
   width: 100%;
   height: 220px;
@@ -145,6 +154,8 @@ canvas {
   background: #05060a;
   border: 1px solid #1f2230;
 }
+
+/* Status */
 
 .status-pill {
   font-size: 12px;
