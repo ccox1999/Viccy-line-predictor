@@ -1,6 +1,7 @@
 let recording = false;
 let data = [];
 let startTime = null;
+let renderQueued = false;
 
 // DOM elements
 const sensorBtn = document.getElementById("sensorBtn");
@@ -20,20 +21,28 @@ const gyroCtx = gyroCanvas.getContext("2d");
 
 const MAX_POINTS = 300;
 
+function getDpr() {
+  return window.devicePixelRatio || 1;
+}
+
 function resizeCanvas(canvas, ctx) {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = getDpr();
 
-  // More stable on iPhone Safari than getBoundingClientRect()
-  const width = canvas.offsetWidth;
-  const height = canvas.offsetHeight;
+  // offsetWidth/offsetHeight are more stable than getBoundingClientRect on iPhone Safari
+  const cssWidth = Math.max(1, canvas.offsetWidth);
+  const cssHeight = Math.max(1, canvas.offsetHeight);
 
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
+  const pixelWidth = Math.round(cssWidth * dpr);
+  const pixelHeight = Math.round(cssHeight * dpr);
 
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+  }
 
-  // Draw using CSS-pixel coordinates while keeping a high-res backing store
+  // Draw using CSS-pixel coordinates on a high-resolution backing store
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
 }
@@ -41,18 +50,25 @@ function resizeCanvas(canvas, ctx) {
 function resizeAllCanvases() {
   resizeCanvas(accelCanvas, accelCtx);
   resizeCanvas(gyroCanvas, gyroCtx);
-  renderCharts();
+  queueRender();
+}
+
+function queueRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderCharts();
+  });
 }
 
 window.addEventListener("resize", resizeAllCanvases);
-
-// iPhone Safari often finalises layout after initial JS execution
-window.addEventListener("load", () => {
-  setTimeout(resizeAllCanvases, 100);
-});
-
 window.addEventListener("orientationchange", () => {
   setTimeout(resizeAllCanvases, 150);
+});
+window.addEventListener("load", () => {
+  setTimeout(resizeAllCanvases, 100);
 });
 
 function getCanvasSize(ctx) {
@@ -66,14 +82,38 @@ function crisp(value) {
   return Math.round(value) + 0.5;
 }
 
-function smooth(values, factor = 0.18) {
+function smooth(values, factor = 0.16) {
   if (values.length < 2) return values.slice();
 
-  const output = [values[0]];
+  const out = [values[0]];
   for (let i = 1; i < values.length; i += 1) {
-    output.push(output[i - 1] * (1 - factor) + values[i] * factor);
+    out.push(out[i - 1] * (1 - factor) + values[i] * factor);
   }
-  return output;
+  return out;
+}
+
+// Reduce the series so we only draw roughly one point per horizontal pixel column.
+// This fixes the coloured "ghost bar" / smear on the right edge.
+function compressSeries(values, targetColumns) {
+  if (values.length <= 2 || targetColumns <= 2) return values.slice();
+
+  if (values.length <= targetColumns) return values.slice();
+
+  const bucketSize = values.length / targetColumns;
+  const compressed = [];
+
+  for (let column = 0; column < targetColumns; column += 1) {
+    const start = Math.floor(column * bucketSize);
+    const end = Math.min(values.length, Math.floor((column + 1) * bucketSize));
+
+    if (start >= values.length) break;
+
+    // Use the last sample in the bucket so the trace feels current
+    const index = Math.max(start, end - 1);
+    compressed.push(values[index]);
+  }
+
+  return compressed;
 }
 
 function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
@@ -87,12 +127,16 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, width, height);
 
+  const dpr = getDpr();
+
+  // Slightly smaller fonts on high-DPI iPhones to counter Safari's heavier text rendering
+  const fontPx = dpr >= 3 ? 7.5 : dpr >= 2 ? 8.5 : 10;
+
   ctx.save();
   ctx.strokeStyle = "#242838";
   ctx.fillStyle = "#9aa0b5";
   ctx.lineWidth = 1;
-  const dpr = window.devicePixelRatio || 1;
-  ctx.font = `${10 / dpr}px -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
+  ctx.font = `${fontPx}px -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
 
@@ -107,7 +151,7 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
     ctx.fillText(labelFn(value), 8, y);
   }
 
-  // Slightly stronger zero line
+  // Stronger zero line
   const zeroY = toY(0);
   if (zeroY >= 0 && zeroY <= height) {
     ctx.strokeStyle = "#3a415a";
@@ -127,7 +171,15 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   const range = yMax - yMin;
   const toY = (value) => height - ((value - yMin) / range) * height;
 
-  const series = smooth(values.slice(-MAX_POINTS), 0.18);
+  // Limit points first, then smooth, then compress to screen columns
+  const clipped = values.slice(-MAX_POINTS);
+  const smoothed = smooth(clipped, 0.16);
+
+  // Keep the final x just inside the right edge to avoid edge artefacts
+  const availableColumns = Math.max(2, Math.floor(width - 2));
+  const reduced = compressSeries(smoothed, availableColumns);
+
+  if (reduced.length < 2) return;
 
   ctx.save();
   ctx.strokeStyle = color;
@@ -136,32 +188,29 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   ctx.lineCap = "round";
   ctx.beginPath();
 
-  series.forEach((value, index) => {
-    const x = series.length === 1 ? 0 : (index / (series.length - 1)) * width;
-    const y = toY(value);
+  const plotWidth = Math.max(1, width - 2);
 
-    if (index === 0) {
+  for (let i = 0; i < reduced.length; i += 1) {
+    const x = 1 + (i / (reduced.length - 1)) * plotWidth;
+    const y = toY(reduced[i]);
+
+    if (i === 0) {
       ctx.moveTo(x, y);
     } else {
       ctx.lineTo(x, y);
     }
-  });
+  }
 
   ctx.stroke();
   ctx.restore();
 }
 
-// Render charts
 function renderCharts() {
-  // Fixed requested scales:
-  // Acceleration: -4g to +4g in 1.0g increments
-  // Rotation: -360°/s to +360°/s in 90°/s increments
+  // Fixed requested scales
   drawAxes(accelCtx, -4, 4, 1, (value) => `${value.toFixed(1)} g`);
   drawAxes(gyroCtx, -360, 360, 90, (value) => `${value.toFixed(0)}°/s`);
 
-  if (data.length === 0) {
-    return;
-  }
+  if (data.length === 0) return;
 
   const ax = data.map((d) => d.ax / 9.81);
   const ay = data.map((d) => d.ay / 9.81);
@@ -224,7 +273,7 @@ sensorBtn.onclick = async () => {
   }
 };
 
-// Start/stop recording
+// Start / stop recording
 recordBtn.onclick = () => {
   recording = !recording;
 
@@ -241,7 +290,7 @@ recordBtn.onclick = () => {
     clearBtn.disabled = true;
 
     updateSessionInfo();
-    renderCharts();
+    queueRender();
     return;
   }
 
@@ -281,27 +330,31 @@ clearBtn.onclick = () => {
   saveBtn.disabled = true;
   clearBtn.disabled = true;
   updateSessionInfo();
-  renderCharts();
+  queueRender();
 };
 
 // Capture motion
-window.addEventListener("devicemotion", (event) => {
-  if (!recording) return;
+window.addEventListener(
+  "devicemotion",
+  (event) => {
+    if (!recording) return;
 
-  const entry = {
-    time: Date.now(),
-    ax: event.acceleration?.x ?? 0,
-    ay: event.acceleration?.y ?? 0,
-    az: event.acceleration?.z ?? 0,
-    rotationAlpha: event.rotationRate?.alpha ?? 0,
-    rotationBeta: event.rotationRate?.beta ?? 0,
-    rotationGamma: event.rotationRate?.gamma ?? 0
-  };
+    const entry = {
+      time: Date.now(),
+      ax: event.acceleration?.x ?? 0,
+      ay: event.acceleration?.y ?? 0,
+      az: event.acceleration?.z ?? 0,
+      rotationAlpha: event.rotationRate?.alpha ?? 0,
+      rotationBeta: event.rotationRate?.beta ?? 0,
+      rotationGamma: event.rotationRate?.gamma ?? 0
+    };
 
-  data.push(entry);
-  updateSessionInfo();
-  renderCharts();
-});
+    data.push(entry);
+    updateSessionInfo();
+    queueRender();
+  },
+  { passive: true }
+);
 
 updateSessionInfo();
 resizeAllCanvases();
