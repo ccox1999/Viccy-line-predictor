@@ -55,6 +55,32 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Status */
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-title {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.status-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
 /* Controls */
 
 .controls-row {
@@ -101,7 +127,7 @@ body {
   font-weight: 600;
 }
 
-/* ICON LEGEND */
+/* Icons */
 
 .icon-legend {
   display: flex;
@@ -120,22 +146,20 @@ body {
   height: 100%;
 }
 
-/* ✅ CRITICAL FIX: apply proper styling to all SVG shapes */
 .legend-item svg * {
   stroke: currentColor;
-  stroke-width: 1.6;          /* thinner = more iOS-like */
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
 }
 
-/* ✅ Z-axis arrows need to be filled triangles */
 .legend-item.az polygon {
   fill: currentColor;
   stroke: none;
 }
 
-/* Colours mapping to graph lines */
+/* Colours */
 
 .legend-item.ax { color: var(--ax); }
 .legend-item.ay { color: var(--ay); }
@@ -154,8 +178,6 @@ canvas {
   background: #05060a;
   border: 1px solid #1f2230;
 }
-
-/* Status */
 
 .status-pill {
   font-size: 12px;
