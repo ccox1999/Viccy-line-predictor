@@ -15,11 +15,12 @@ const durationEl = document.getElementById("duration");
 
 // Canvas setup
 const accelCanvas = document.getElementById("accelChart");
-const accelCtx = accelCanvas.getContext("2d");
+const accelCtx = accelCanvas.getContext("2d", { alpha: false });
 const gyroCanvas = document.getElementById("gyroChart");
-const gyroCtx = gyroCanvas.getContext("2d");
+const gyroCtx = gyroCanvas.getContext("2d", { alpha: false });
 
-const MAX_POINTS = 300;
+// Keep a larger buffer so the plot can scroll smoothly on dense data
+const MAX_POINTS = 1500;
 
 function getDpr() {
   return window.devicePixelRatio || 1;
@@ -42,7 +43,7 @@ function resizeCanvas(canvas, ctx) {
     canvas.style.height = `${cssHeight}px`;
   }
 
-  // Draw using CSS-pixel coordinates on a high-resolution backing store
+  // Draw using CSS-pixel coordinates over a Retina backing store
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
 }
@@ -55,8 +56,8 @@ function resizeAllCanvases() {
 
 function queueRender() {
   if (renderQueued) return;
-  renderQueued = true;
 
+  renderQueued = true;
   requestAnimationFrame(() => {
     renderQueued = false;
     renderCharts();
@@ -78,42 +79,49 @@ function getCanvasSize(ctx) {
   };
 }
 
-function crisp(value) {
-  return Math.round(value) + 0.5;
+function crisp(v) {
+  return Math.round(v) + 0.5;
 }
 
-function smooth(values, factor = 0.16) {
-  if (values.length < 2) return values.slice();
+/**
+ * Map values into horizontal pixel columns.
+ * Each column gets one value only, so we avoid:
+ * - the right-edge smear / ghost bar
+ * - jitter from multiple samples stacking into one x position
+ *
+ * We use the last value that lands in each column so the trace feels current.
+ */
+function binSeriesToColumns(values, width) {
+  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset both sides
+  const clipped = values.slice(-MAX_POINTS);
 
-  const out = [values[0]];
-  for (let i = 1; i < values.length; i += 1) {
-    out.push(out[i - 1] * (1 - factor) + values[i] * factor);
-  }
-  return out;
-}
-
-// Reduce the series so we only draw roughly one point per horizontal pixel column.
-// This fixes the coloured "ghost bar" / smear on the right edge.
-function compressSeries(values, targetColumns) {
-  if (values.length <= 2 || targetColumns <= 2) return values.slice();
-
-  if (values.length <= targetColumns) return values.slice();
-
-  const bucketSize = values.length / targetColumns;
-  const compressed = [];
-
-  for (let column = 0; column < targetColumns; column += 1) {
-    const start = Math.floor(column * bucketSize);
-    const end = Math.min(values.length, Math.floor((column + 1) * bucketSize));
-
-    if (start >= values.length) break;
-
-    // Use the last sample in the bucket so the trace feels current
-    const index = Math.max(start, end - 1);
-    compressed.push(values[index]);
+  if (clipped.length === 0) return [];
+  if (clipped.length === 1) {
+    return [{ x: 1, value: clipped[0] }];
   }
 
-  return compressed;
+  const columns = new Array(plotWidth).fill(null);
+
+  for (let i = 0; i < clipped.length; i += 1) {
+    const x = Math.min(
+      plotWidth - 1,
+      Math.floor((i / (clipped.length - 1)) * (plotWidth - 1))
+    );
+    columns[x] = clipped[i];
+  }
+
+  const points = [];
+  for (let x = 0; x < columns.length; x += 1) {
+    const value = columns[x];
+    if (value !== null) {
+      points.push({
+        x: x + 1, // leave a 1px inset
+        value
+      });
+    }
+  }
+
+  return points;
 }
 
 function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
@@ -128,8 +136,7 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.fillRect(0, 0, width, height);
 
   const dpr = getDpr();
-
-  // Slightly smaller fonts on high-DPI iPhones to counter Safari's heavier text rendering
+  // Smaller labels on high-DPI iPhones
   const fontPx = dpr >= 3 ? 7.5 : dpr >= 2 ? 8.5 : 10;
 
   ctx.save();
@@ -171,28 +178,25 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   const range = yMax - yMin;
   const toY = (value) => height - ((value - yMin) / range) * height;
 
-  // Limit points first, then smooth, then compress to screen columns
-  const clipped = values.slice(-MAX_POINTS);
-  const smoothed = smooth(clipped, 0.16);
-
-  // Keep the final x just inside the right edge to avoid edge artefacts
-  const availableColumns = Math.max(2, Math.floor(width - 2));
-  const reduced = compressSeries(smoothed, availableColumns);
-
-  if (reduced.length < 2) return;
+  const points = binSeriesToColumns(values, width);
+  if (points.length < 2) return;
 
   ctx.save();
+
+  // Clip inside the chart so nothing paints into borders/right edge
+  ctx.beginPath();
+  ctx.rect(1, 1, Math.max(1, width - 2), Math.max(1, height - 2));
+  ctx.clip();
+
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.beginPath();
 
-  const plotWidth = Math.max(1, width - 2);
-
-  for (let i = 0; i < reduced.length; i += 1) {
-    const x = 1 + (i / (reduced.length - 1)) * plotWidth;
-    const y = toY(reduced[i]);
+  for (let i = 0; i < points.length; i += 1) {
+    const x = points[i].x;
+    const y = toY(points[i].value);
 
     if (i === 0) {
       ctx.moveTo(x, y);
@@ -358,3 +362,4 @@ window.addEventListener(
 
 updateSessionInfo();
 resizeAllCanvases();
+``
