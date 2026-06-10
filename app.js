@@ -7,179 +7,185 @@ const sensorBtn = document.getElementById("sensorBtn");
 const recordBtn = document.getElementById("recordBtn");
 const saveBtn = document.getElementById("saveBtn");
 const clearBtn = document.getElementById("clearBtn");
-
 const sensorStatus = document.getElementById("sensorStatus");
 const sessionState = document.getElementById("sessionState");
 const sampleCountEl = document.getElementById("sampleCount");
 const durationEl = document.getElementById("duration");
 
-// Canvas setup with high DPI
+// Canvas setup
 const accelCanvas = document.getElementById("accelChart");
 const accelCtx = accelCanvas.getContext("2d");
 const gyroCanvas = document.getElementById("gyroChart");
 const gyroCtx = gyroCanvas.getContext("2d");
 
-function resizeCanvas(canvas) {
+const MAX_POINTS = 300;
+
+function resizeCanvas(canvas, ctx) {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
 
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  canvas.style.width = `${rect.width}px`;
+  canvas.style.height = `${rect.height}px`;
 
-  canvas.style.width = rect.width + "px";
-  canvas.style.height = rect.height + "px";
-
-  const ctx = canvas.getContext("2d");
+  // Draw in CSS pixels while keeping Retina sharpness.
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
 }
 
-
 function resizeAllCanvases() {
-  resizeCanvas(accelCanvas);
-  resizeCanvas(gyroCanvas);
+  resizeCanvas(accelCanvas, accelCtx);
+  resizeCanvas(gyroCanvas, gyroCtx);
   renderCharts();
 }
 
 window.addEventListener("resize", resizeAllCanvases);
-resizeAllCanvases();
 
-// Utility: smoothing
-function smooth(values, factor = 0.2) {
-  if (values.length < 2) return values;
-  const out = [values[0]];
-  for (let i = 1; i < values.length; i++) {
-    out.push(out[i - 1] * (1 - factor) + values[i] * factor);
-  }
-  return out;
+function getCanvasSize(ctx) {
+  return {
+    width: ctx.canvas.clientWidth,
+    height: ctx.canvas.clientHeight
+  };
 }
 
-// Draw axes with g-force ticks
-function drawAxes(ctx, yMin, yMax, majorStep, minorStep, labelFn) {
-  const { width, height } = ctx.canvas;
-  ctx.save();
-  ctx.clearRect(0, 0, width, height);
+function crisp(value) {
+  return Math.round(value) + 0.5;
+}
 
-  ctx.translate(0.5, 0.5); // crisp lines
+function smooth(values, factor = 0.18) {
+  if (values.length < 2) return values.slice();
+
+  const output = [values[0]];
+  for (let i = 1; i < values.length; i += 1) {
+    output.push(output[i - 1] * (1 - factor) + values[i] * factor);
+  }
+  return output;
+}
+
+function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
+  const { width, height } = getCanvasSize(ctx);
+  const range = yMax - yMin;
+  const toY = (value) => height - ((value - yMin) / range) * height;
+
+  ctx.clearRect(0, 0, width, height);
 
   // Background
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, width, height);
 
-  // Grid
-  ctx.strokeStyle = "#1b1e2a";
+  // Grid + labels
+  ctx.save();
+  ctx.strokeStyle = "#242838";
+  ctx.fillStyle = "#9aa0b5";
   ctx.lineWidth = 1;
-
-  const range = yMax - yMin;
-  const toY = v => height - ((v - yMin) / range) * height;
-
-  // Minor ticks
-  for (let v = yMin; v <= yMax + 1e-6; v += minorStep) {
-    const y = toY(v);
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-
-  // Major ticks + labels
-  ctx.strokeStyle = "#2a2d3a";
-  ctx.fillStyle = "#a0a4b8";
-  ctx.font = `9px -apple-system, system-ui`;
+  ctx.font = "10px -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
 
-  for (let v = yMin; v <= yMax + 1e-6; v += majorStep) {
-    const y = toY(v);
+  for (let value = yMin; value <= yMax + 1e-9; value += majorStep) {
+    const y = crisp(toY(value));
+
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
     ctx.stroke();
 
-    const label = labelFn(v);
-    ctx.fillText(label, 8 * (window.devicePixelRatio || 1), y);
+    const label = labelFn(value);
+    ctx.fillText(label, 8, y);
+  }
+
+  // Stronger zero line
+  const zeroY = toY(0);
+  if (zeroY >= 0 && zeroY <= height) {
+    ctx.strokeStyle = "#3a415a";
+    ctx.beginPath();
+    ctx.moveTo(0, crisp(zeroY));
+    ctx.lineTo(width, crisp(zeroY));
+    ctx.stroke();
   }
 
   ctx.restore();
 }
 
-// Draw line series
 function drawSeries(ctx, values, color, yMin, yMax) {
-  const { width, height } = ctx.canvas;
-  const dpr = window.devicePixelRatio || 1;
+  if (!values.length) return;
 
-  const maxPoints = 300;
-  const slice = values.slice(-maxPoints);
-  const smoothed = smooth(slice, 0.25);
-
+  const { width, height } = getCanvasSize(ctx);
   const range = yMax - yMin;
-  const toY = v => height - ((v - yMin) / range) * height;
+  const toY = (value) => height - ((value - yMin) / range) * height;
+
+  const series = smooth(values.slice(-MAX_POINTS), 0.18);
 
   ctx.save();
-  ctx.lineWidth = 1; // thinner, cleaner
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  ctx.strokeStyle = color;
   ctx.beginPath();
 
-  smoothed.forEach((v, i) => {
-    const x = (i / Math.max(1, maxPoints - 1)) * width;
-    const y = toY(v);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  series.forEach((value, index) => {
+    const x = series.length === 1 ? 0 : (index / (series.length - 1)) * width;
+    const y = toY(value);
+
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
   });
 
   ctx.stroke();
   ctx.restore();
 }
 
-// Render charts
 function renderCharts() {
+  // Fixed chart scales requested:
+  // Acceleration: -4g to +4g in 1g increments
+  // Rotation: -360°/s to +360°/s in 90°/s increments
+  drawAxes(accelCtx, -4, 4, 1, (value) => `${value.toFixed(1)} g`);
+  drawAxes(gyroCtx, -360, 360, 90, (value) => `${value.toFixed(0)}°/s`);
+
   if (data.length === 0) {
-    drawAxes(accelCtx, -4, 4, 1, 0.5, v => `${v.toFixed(1)} g`);
-    drawAxes(gyroCtx, -360, 360, 90, 30, v => `${v.toFixed(0)}°/s`);
     return;
   }
 
-  const ax = data.map(d => d.ax / 9.81); // convert m/s² to g
-  const ay = data.map(d => d.ay / 9.81);
-  const az = data.map(d => d.az / 9.81);
+  const ax = data.map((d) => d.ax / 9.81);
+  const ay = data.map((d) => d.ay / 9.81);
+  const az = data.map((d) => d.az / 9.81);
 
-  const alpha = data.map(d => d.rotationAlpha);
-  const beta = data.map(d => d.rotationBeta);
-  const gamma = data.map(d => d.rotationGamma);
+  const alpha = data.map((d) => d.rotationAlpha);
+  const beta = data.map((d) => d.rotationBeta);
+  const gamma = data.map((d) => d.rotationGamma);
 
-  // Accel: fixed ±3g range
-  drawAxes(accelCtx, -4, 4, 1, 0.5, v => `${v.toFixed(1)} g`);
-  drawSeries(accelCtx, ax, "#ff375f", -3, 3);
-  drawSeries(accelCtx, ay, "#32d74b", -3, 3);
-  drawSeries(accelCtx, az, "#64d2ff", -3, 3);
+  drawSeries(accelCtx, ax, "#ff375f", -4, 4);
+  drawSeries(accelCtx, ay, "#32d74b", -4, 4);
+  drawSeries(accelCtx, az, "#64d2ff", -4, 4);
 
-  // Gyro: dynamic range but clamped
-  drawAxes(gyroCtx, -360, 360, 90, 30, v => `${v.toFixed(0)}°/s`);
-  drawSeries(gyroCtx, alpha, "#ffd60a", -gyroRange, gyroRange);
-  drawSeries(gyroCtx, beta, "#ff9f0a", -gyroRange, gyroRange);
-  drawSeries(gyroCtx, gamma, "#bf5af2", -gyroRange, gyroRange);
+  drawSeries(gyroCtx, alpha, "#ffd60a", -360, 360);
+  drawSeries(gyroCtx, beta, "#ff9f0a", -360, 360);
+  drawSeries(gyroCtx, gamma, "#bf5af2", -360, 360);
 }
 
-// Update session info
 function updateSessionInfo() {
-  sampleCountEl.textContent = data.length.toString();
+  sampleCountEl.textContent = String(data.length);
+
   if (!startTime || data.length === 0) {
     durationEl.textContent = "0.0 s";
     return;
   }
+
   const lastTime = data[data.length - 1].time;
   const seconds = (lastTime - startTime) / 1000;
   durationEl.textContent = `${seconds.toFixed(1)} s`;
 }
 
-// Motion permission
 sensorBtn.onclick = async () => {
   try {
-    // iOS 13+ explicit permission
-    if (typeof DeviceMotionEvent !== "undefined" &&
-        typeof DeviceMotionEvent.requestPermission === "function") {
-
+    if (
+      typeof DeviceMotionEvent !== "undefined" &&
+      typeof DeviceMotionEvent.requestPermission === "function"
+    ) {
       const response = await DeviceMotionEvent.requestPermission();
 
       if (response !== "granted") {
@@ -190,27 +196,20 @@ sensorBtn.onclick = async () => {
       }
     }
 
-    // SUCCESS
     sensorStatus.textContent = "Motion permission: Granted";
     sensorStatus.className = "status-pill status-pill--granted";
     sessionState.textContent = "Sensors enabled";
 
-    // Enable recording
     recordBtn.disabled = false;
-
-    // Disable this button after success
     sensorBtn.disabled = true;
     sensorBtn.textContent = "Sensors Enabled";
-
-  } catch (err) {
+  } catch (error) {
     sensorStatus.textContent = "Motion permission: Error";
     sensorStatus.className = "status-pill status-pill--denied";
     sessionState.textContent = "Error requesting permission";
   }
 };
 
-
-// Start/stop recording
 recordBtn.onclick = () => {
   recording = !recording;
 
@@ -223,33 +222,36 @@ recordBtn.onclick = () => {
     sessionState.textContent = "Recording…";
     saveBtn.disabled = true;
     clearBtn.disabled = true;
-  } else {
-    recordBtn.textContent = "Start Recording";
-    recordBtn.classList.remove("btn-primary");
-    recordBtn.classList.add("btn-secondary");
-    sessionState.textContent = data.length ? "Recorded" : "Idle";
-    saveBtn.disabled = data.length === 0;
-    clearBtn.disabled = data.length === 0;
+    updateSessionInfo();
+    renderCharts();
+    return;
   }
+
+  recordBtn.textContent = "Start Recording";
+  recordBtn.classList.remove("btn-primary");
+  recordBtn.classList.add("btn-secondary");
+  sessionState.textContent = data.length ? "Recorded" : "Idle";
+  saveBtn.disabled = data.length === 0;
+  clearBtn.disabled = data.length === 0;
 };
 
-// Save recording as JSON
 saveBtn.onclick = () => {
   if (!data.length) return;
+
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json"
   });
+
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `motion-recording-${Date.now()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `motion-recording-${Date.now()}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 };
 
-// Clear data
 clearBtn.onclick = () => {
   data = [];
   startTime = null;
@@ -260,7 +262,6 @@ clearBtn.onclick = () => {
   renderCharts();
 };
 
-// Capture motion
 window.addEventListener("devicemotion", (event) => {
   if (!recording) return;
 
@@ -278,3 +279,6 @@ window.addEventListener("devicemotion", (event) => {
   updateSessionInfo();
   renderCharts();
 });
+
+updateSessionInfo();
+resizeAllCanvases();
