@@ -2,17 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+  >
   <title>Victoria Line Motion Lab</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="app-shell">
+
     <header class="app-header">
       <h1>Victoria Line Motion Lab</h1>
       <p class="subtitle">
         Record iPhone motion data and visualise accelerations and rotations
-        with a native-feeling iOS interface.
       </p>
     </header>
 
@@ -32,95 +36,94 @@
 
       <div class="controls-row">
         <button id="saveBtn" class="btn btn-outline" disabled>
-          Save Recording (JSON)
+          Save Recording
         </button>
         <button id="clearBtn" class="btn btn-outline" disabled>
-          Clear Data
+          Clear
         </button>
-      </div>
-    </section>
-
-    <section class="card status-card">
-      <div class="status-header">
-        <div class="status-title">Session status</div>
-        <div id="sessionState" class="status-value">Idle</div>
-      </div>
-
-      <div class="status-body">
-        <div class="status-row">
-          <span>Total samples</span>
-          <span id="sampleCount">0</span>
-        </div>
-        <div class="status-row">
-          <span>Duration</span>
-          <span id="duration">0.0 s</span>
-        </div>
       </div>
     </section>
 
     <section class="card chart-card">
       <div class="chart-header">
         <div class="chart-title">Acceleration (g)</div>
+
         <div class="chart-legend icon-legend">
 
-  <!-- AX (left/right) -->
-  <div class="legend-item">
-    <svg viewBox="0 0 40 40" class="legend-icon">
-      <!-- phone -->
-      <rect x="14" y="6" width="12" height="28" rx="3" stroke="currentColor" fill="none" stroke-width="2"/>
+          <!-- AX -->
+          <div class="legend-item ax">
+            <svg viewBox="0 0 40 40">
+              <rect x="14" y="6" width="12" height="28" rx="3"/>
+              <line x1="4" y1="20" x2="14" y2="20"/>
+              <line x1="36" y1="20" x2="26" y2="20"/>
+              <polyline points="6,18 4,20 6,22"/>
+              <polyline points="34,18 36,20 34,22"/>
+            </svg>
+          </div>
 
-      <!-- arrows -->
-      <line x1="4" y1="20" x2="14" y2="20" stroke="currentColor" stroke-width="2"/>
-      <line x1="36" y1="20" x2="26" y2="20" stroke="currentColor" stroke-width="2"/>
+          <!-- AY -->
+          <div class="legend-item ay">
+            <svg viewBox="0 0 40 40">
+              <rect x="14" y="6" width="12" height="28" rx="3"/>
+              <line x1="20" y1="4" x2="20" y2="14"/>
+              <line x1="20" y1="36" x2="20" y2="26"/>
+              <polyline points="18,6 20,4 22,6"/>
+              <polyline points="18,34 20,36 22,34"/>
+            </svg>
+          </div>
 
-      <!-- arrow heads -->
-      <polyline points="6,18 4,20 6,22" fill="none" stroke="currentColor" stroke-width="2"/>
-      <polyline points="34,18 36,20 34,22" fill="none" stroke="currentColor" stroke-width="2"/>
-    </svg>
-  </div>
+          <!-- AZ -->
+          <div class="legend-item az">
+            <svg viewBox="0 0 40 40">
+              <rect x="16" y="8" width="8" height="24" rx="2"/>
+              <polygon points="20,4 18,10 22,10"/>
+              <polygon points="20,36 18,30 22,30"/>
+            </svg>
+          </div>
 
-  <!-- AY (up/down) -->
-  <div class="legend-item">
-    <svg viewBox="0 0 40 40" class="legend-icon">
-      <rect x="14" y="6" width="12" height="28" rx="3" stroke="currentColor" fill="none" stroke-width="2"/>
-
-      <line x1="20" y1="4" x2="20" y2="14" stroke="currentColor" stroke-width="2"/>
-      <line x1="20" y1="36" x2="20" y2="26" stroke="currentColor" stroke-width="2"/>
-
-      <polyline points="18,6 20,4 22,6" fill="none" stroke="currentColor" stroke-width="2"/>
-      <polyline points="18,34 20,36 22,34" fill="none" stroke="currentColor" stroke-width="2"/>
-    </svg>
-  </div>
-
-  <!-- AZ (in/out screen) -->
-  <div class="legend-item">
-    <svg viewBox="0 0 40 40" class="legend-icon">
-      <!-- phone side view -->
-      <rect x="16" y="8" width="8" height="24" rx="2" stroke="currentColor" fill="none" stroke-width="2"/>
-
-      <!-- arrows (in/out) -->
-      <polygon points="20,4 18,10 22,10" fill="currentColor"/>
-      <polygon points="20,36 18,30 22,30" fill="currentColor"/>
-    </svg>
-  </div>
-
-</div>
-
+        </div>
       </div>
+
       <canvas id="accelChart"></canvas>
     </section>
 
     <section class="card chart-card">
       <div class="chart-header">
         <div class="chart-title">Rotation (°/s)</div>
-        <div class="chart-legend">
-          <span class="legend-dot legend-dot--alpha"></span> α
-          <span class="legend-dot legend-dot--beta"></span> β
-          <span class="legend-dot legend-dot--gamma"></span> γ
+
+        <div class="chart-legend icon-legend">
+
+          <!-- Alpha (twist) -->
+          <div class="legend-item alpha">
+            <svg viewBox="0 0 40 40">
+              <rect x="14" y="6" width="12" height="28" rx="3"/>
+              <path d="M8 20a12 12 0 0 1 24 0"/>
+              <polyline points="28,14 32,18 26,18"/>
+            </svg>
+          </div>
+
+          <!-- Beta (tilt) -->
+          <div class="legend-item beta">
+            <svg viewBox="0 0 40 40">
+              <rect x="14" y="6" width="12" height="28" rx="3"/>
+              <path d="M20 6l6 6M20 6l-6 6"/>
+            </svg>
+          </div>
+
+          <!-- Gamma (roll) -->
+          <div class="legend-item gamma">
+            <svg viewBox="0 0 40 40">
+              <rect x="14" y="6" width="12" height="28" rx="3"/>
+              <path d="M10 10Q20 4 30 10Q20 16 10 10"/>
+            </svg>
+          </div>
+
         </div>
       </div>
+
       <canvas id="gyroChart"></canvas>
     </section>
+
   </div>
 
   <script src="app.js"></script>
