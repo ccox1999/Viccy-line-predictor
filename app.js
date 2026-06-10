@@ -9,7 +9,7 @@ const recordBtn = document.getElementById("recordBtn");
 const saveBtn = document.getElementById("saveBtn");
 const clearBtn = document.getElementById("clearBtn");
 const sensorStatus = document.getElementById("sensorStatus");
-const sessionState = document.getElementById("sessionState");
+const sessionState = document.getElementById("sessionState") || { textContent: "" };
 const sampleCountEl = document.getElementById("sampleCount");
 const durationEl = document.getElementById("duration");
 
