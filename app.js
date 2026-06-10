@@ -1,7 +1,6 @@
 let recording = false;
 let data = [];
 let startTime = null;
-let renderQueued = false;
 
 // DOM elements
 const sensorBtn = document.getElementById("sensorBtn");
@@ -10,8 +9,8 @@ const saveBtn = document.getElementById("saveBtn");
 const clearBtn = document.getElementById("clearBtn");
 const sensorStatus = document.getElementById("sensorStatus");
 const sessionState = document.getElementById("sessionState") || { textContent: "" };
-const sampleCountEl = document.getElementById("sampleCount");
-const durationEl = document.getElementById("duration");
+const sampleCountEl = document.getElementById("sampleCount") || { textContent: "" };
+const durationEl = document.getElementById("duration") || { textContent: "" };
 
 // Canvas setup
 const accelCanvas = document.getElementById("accelChart");
@@ -55,14 +54,14 @@ function resizeAllCanvases() {
   queueRender();
 }
 
+/**
+ * IMPORTANT FIX:
+ * iPhone Safari was not reliably running the requestAnimationFrame path
+ * in this sensor/rendering flow, so plots stopped updating.
+ * We render immediately again, like your earlier working version.
+ */
 function queueRender() {
-  if (renderQueued) return;
-  renderQueued = true;
-
-  requestAnimationFrame(() => {
-    renderQueued = false;
-    renderCharts();
-  });
+  renderCharts();
 }
 
 window.addEventListener("resize", resizeAllCanvases);
