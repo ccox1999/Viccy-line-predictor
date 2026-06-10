@@ -20,10 +20,9 @@ const gyroCanvas = document.getElementById("gyroChart");
 const gyroCtx = gyroCanvas.getContext("2d");
 
 function resizeCanvas(canvas) {
-  const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  canvas.width = rect.width;
+  canvas.height = rect.height;
 }
 
 function resizeAllCanvases() {
@@ -170,10 +169,8 @@ function updateSessionInfo() {
 
 // Motion permission
 sensorBtn.onclick = async () => {
-  sessionState.textContent = "Requesting permission…";
-
   try {
-    // iOS 13+ requires explicit permission
+    // iOS 13+ explicit permission
     if (typeof DeviceMotionEvent !== "undefined" &&
         typeof DeviceMotionEvent.requestPermission === "function") {
 
@@ -187,15 +184,15 @@ sensorBtn.onclick = async () => {
       }
     }
 
-    // If we reach here, permission is granted
+    // SUCCESS
     sensorStatus.textContent = "Motion permission: Granted";
     sensorStatus.className = "status-pill status-pill--granted";
     sessionState.textContent = "Sensors enabled";
 
-    // Enable recording button
+    // Enable recording
     recordBtn.disabled = false;
 
-    // Disable the sensor button (no need to press again)
+    // Disable this button after success
     sensorBtn.disabled = true;
     sensorBtn.textContent = "Sensors Enabled";
 
