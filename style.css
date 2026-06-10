@@ -57,6 +57,8 @@ body {
   margin-top: 14px;
   box-shadow: var(--shadow-soft);
   border: 1px solid var(--border);
+  position: relative;
+  z-index: 10;
 }
 
 /* Controls */
@@ -224,4 +226,6 @@ canvas {
   border-radius: 14px;
   background: #05060a;
   border: 1px solid #1f2230;
+  position: relative;
+  z-index: 1;
 }
