@@ -106,7 +106,7 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   const toY = v => height - ((v - yMin) / range) * height;
 
   ctx.save();
-  ctx.lineWidth = 2 * dpr;
+  ctx.lineWidth = 1.2 * dpr;
   ctx.strokeStyle = color;
   ctx.beginPath();
 
