@@ -21,9 +21,18 @@ const gyroCtx = gyroCanvas.getContext("2d");
 
 function resizeCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width;
-  canvas.height = rect.height;
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = rect.height + "px";
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+
 
 function resizeAllCanvases() {
   resizeCanvas(accelCanvas);
@@ -75,7 +84,7 @@ function drawAxes(ctx, yMin, yMax, majorStep, minorStep, labelFn) {
   // Major ticks + labels
   ctx.strokeStyle = "#2a2d3a";
   ctx.fillStyle = "#a0a4b8";
-  ctx.font = `${12 * (window.devicePixelRatio || 1)}px -apple-system, system-ui`;
+  ctx.font = `9px -apple-system, system-ui`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
 
@@ -106,7 +115,9 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   const toY = v => height - ((v - yMin) / range) * height;
 
   ctx.save();
-  ctx.lineWidth = 1.2 * dpr;
+  ctx.lineWidth = 1; // thinner, cleaner
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   ctx.strokeStyle = color;
   ctx.beginPath();
 
@@ -124,8 +135,8 @@ function drawSeries(ctx, values, color, yMin, yMax) {
 // Render charts
 function renderCharts() {
   if (data.length === 0) {
-    drawAxes(accelCtx, -3, 3, 1, 0.25, v => `${v.toFixed(1)} g`);
-    drawAxes(gyroCtx, -180, 180, 60, 15, v => `${v.toFixed(0)}°/s`);
+    drawAxes(accelCtx, -4, 4, 1, 0.5, v => `${v.toFixed(1)} g`);
+    drawAxes(gyroCtx, -360, 360, 90, 30, v => `${v.toFixed(0)}°/s`);
     return;
   }
 
@@ -138,18 +149,13 @@ function renderCharts() {
   const gamma = data.map(d => d.rotationGamma);
 
   // Accel: fixed ±3g range
-  drawAxes(accelCtx, -3, 3, 1, 0.25, v => `${v.toFixed(1)} g`);
+  drawAxes(accelCtx, -4, 4, 1, 0.5, v => `${v.toFixed(1)} g`);
   drawSeries(accelCtx, ax, "#ff375f", -3, 3);
   drawSeries(accelCtx, ay, "#32d74b", -3, 3);
   drawSeries(accelCtx, az, "#64d2ff", -3, 3);
 
   // Gyro: dynamic range but clamped
-  const gyroAll = alpha.concat(beta, gamma);
-  const maxAbs = Math.max(60, Math.min(360, Math.max(...gyroAll.map(v => Math.abs(v)) || 60)));
-  const gyroRange = maxAbs;
-
-  drawAxes(gyroCtx, -gyroRange, gyroRange, gyroRange / 3, gyroRange / 12,
-           v => `${v.toFixed(0)}°/s`);
+  drawAxes(gyroCtx, -360, 360, 90, 30, v => `${v.toFixed(0)}°/s`);
   drawSeries(gyroCtx, alpha, "#ffd60a", -gyroRange, gyroRange);
   drawSeries(gyroCtx, beta, "#ff9f0a", -gyroRange, gyroRange);
   drawSeries(gyroCtx, gamma, "#bf5af2", -gyroRange, gyroRange);
