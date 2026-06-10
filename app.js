@@ -170,24 +170,42 @@ function updateSessionInfo() {
 
 // Motion permission
 sensorBtn.onclick = async () => {
+  sessionState.textContent = "Requesting permission…";
+
   try {
+    // iOS 13+ requires explicit permission
     if (typeof DeviceMotionEvent !== "undefined" &&
         typeof DeviceMotionEvent.requestPermission === "function") {
-      const permission = await DeviceMotionEvent.requestPermission();
-      if (permission !== "granted") {
+
+      const response = await DeviceMotionEvent.requestPermission();
+
+      if (response !== "granted") {
         sensorStatus.textContent = "Motion permission: Denied";
         sensorStatus.className = "status-pill status-pill--denied";
+        sessionState.textContent = "Permission denied";
         return;
       }
     }
+
+    // If we reach here, permission is granted
     sensorStatus.textContent = "Motion permission: Granted";
     sensorStatus.className = "status-pill status-pill--granted";
+    sessionState.textContent = "Sensors enabled";
+
+    // Enable recording button
     recordBtn.disabled = false;
-  } catch (e) {
-    sensorStatus.textContent = "Motion permission: Not available";
+
+    // Disable the sensor button (no need to press again)
+    sensorBtn.disabled = true;
+    sensorBtn.textContent = "Sensors Enabled";
+
+  } catch (err) {
+    sensorStatus.textContent = "Motion permission: Error";
     sensorStatus.className = "status-pill status-pill--denied";
+    sessionState.textContent = "Error requesting permission";
   }
 };
+
 
 // Start/stop recording
 recordBtn.onclick = () => {
