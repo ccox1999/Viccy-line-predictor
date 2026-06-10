@@ -20,8 +20,8 @@ const gyroCanvas = document.getElementById("gyroChart");
 const gyroCtx = gyroCanvas.getContext("2d", { alpha: false });
 
 // Display settings
-const TIME_WINDOW_MS = 8000;     // visible time span
-const MAX_BUFFER_POINTS = 20000; // raw history kept for save/export
+const TIME_WINDOW_MS = 8000;      // visible time span
+const MAX_BUFFER_POINTS = 20000;  // raw history retained for export
 
 function getDpr() {
   return window.devicePixelRatio || 1;
@@ -30,7 +30,7 @@ function getDpr() {
 function resizeCanvas(canvas, ctx) {
   const dpr = getDpr();
 
-  // More stable on iPhone Safari than getBoundingClientRect()
+  // More stable than getBoundingClientRect on iPhone Safari
   const cssWidth = Math.max(1, canvas.offsetWidth);
   const cssHeight = Math.max(1, canvas.offsetHeight);
 
@@ -44,7 +44,7 @@ function resizeCanvas(canvas, ctx) {
     canvas.style.height = `${cssHeight}px`;
   }
 
-  // Draw in CSS pixels over a high-res backing store
+  // Draw using CSS-pixel coordinates over a high-resolution backing store
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
 }
@@ -57,8 +57,8 @@ function resizeAllCanvases() {
 
 function queueRender() {
   if (renderQueued) return;
-
   renderQueued = true;
+
   requestAnimationFrame(() => {
     renderQueued = false;
     renderCharts();
@@ -82,6 +82,10 @@ function getCanvasSize(ctx) {
 
 function crisp(v) {
   return Math.round(v) + 0.5;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
 function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
@@ -117,7 +121,7 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
     ctx.fillText(labelFn(value), 8, y);
   }
 
-  // Stronger zero axis
+  // Stronger zero line
   const zeroY = toY(0);
   if (zeroY >= 0 && zeroY <= height) {
     ctx.strokeStyle = "#3a415a";
@@ -130,122 +134,164 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.restore();
 }
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
 /**
- * Build plotted points for a rolling time window.
- *
- * Key left-edge fix:
- * - Insert an interpolated point exactly at windowStart if the window cuts
- *   through a segment. This stops the first visible point from "jumping"
- *   as old data exits the left edge.
- *
- * Key right-edge fix:
- * - Bin to one point per pixel column.
- *
- * Key clipping behaviour:
- * - No y clamping. Values above/below the range are allowed to run outside
- *   the plot vertically.
+ * Create visible points based on a fixed rolling time window.
+ * Includes a synthetic point exactly at the left boundary when the window
+ * cuts through a segment so the trace exits smoothly rather than wobbling.
  */
-function buildVisiblePoints(entries, width, valueAccessor) {
-  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset both sides
+function buildVisibleSamples(entries, valueAccessor) {
   if (entries.length < 2) return [];
 
   const latestTime = entries[entries.length - 1].time;
   const windowStart = latestTime - TIME_WINDOW_MS;
   const windowEnd = latestTime;
 
-  // Find first sample with time >= windowStart
   let firstVisibleIndex = entries.findIndex((e) => e.time >= windowStart);
-  if (firstVisibleIndex === -1) {
-    // All points are older than the window
-    return [];
-  }
+  if (firstVisibleIndex === -1) return [];
 
-  const visiblePoints = [];
+  const visible = [];
 
-  // ---- LEFT BOUNDARY INTERPOLATION ----
-  // If windowStart falls between two samples, create a synthetic point exactly
-  // at x = left edge. This removes the outgoing-edge wobble/spike.
+  // Interpolate exact left-edge sample if the window boundary cuts a segment
   if (firstVisibleIndex > 0) {
     const prev = entries[firstVisibleIndex - 1];
     const next = entries[firstVisibleIndex];
 
     if (prev.time < windowStart && next.time > windowStart) {
       const t = (windowStart - prev.time) / (next.time - prev.time);
-      const interpolatedValue = lerp(valueAccessor(prev), valueAccessor(next), t);
-      visiblePoints.push({
+      visible.push({
         time: windowStart,
-        value: interpolatedValue
+        value: lerp(valueAccessor(prev), valueAccessor(next), t)
       });
     }
-  } else if (entries[0].time >= windowStart) {
-    // Window starts before the first sample: pin the first real sample
-    visiblePoints.push({
+  } else {
+    visible.push({
       time: entries[0].time,
       value: valueAccessor(entries[0])
     });
   }
 
-  // Add all real samples inside the visible time window
   for (let i = firstVisibleIndex; i < entries.length; i += 1) {
     const entry = entries[i];
     if (entry.time > windowEnd) break;
     if (entry.time >= windowStart) {
-      visiblePoints.push({
+      visible.push({
         time: entry.time,
         value: valueAccessor(entry)
       });
     }
   }
 
-  if (visiblePoints.length < 2) return [];
+  return visible;
+}
 
-  // Bin to one point per pixel column
-  const columns = new Array(plotWidth).fill(null);
+/**
+ * Collapse visible samples so there is at most one plotted point per x column.
+ * This stops same-column stacking / smearing.
+ */
+function samplesToPlotPoints(samples, width) {
+  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset both sides
+  if (samples.length < 2) return [];
 
-  for (const point of visiblePoints) {
-    const progress = (point.time - windowStart) / TIME_WINDOW_MS;
-    const xColumn = Math.min(
+  const startTime = samples[0].time;
+  const endTime = startTime + TIME_WINDOW_MS;
+
+  const cols = new Array(plotWidth).fill(null);
+
+  for (const sample of samples) {
+    const progress = (sample.time - startTime) / (endTime - startTime);
+    const xCol = Math.min(
       plotWidth - 1,
       Math.max(0, Math.floor(progress * (plotWidth - 1)))
     );
 
-    const existing = columns[xColumn];
+    // Keep the latest sample for that x-column
+    cols[xCol] = sample.value;
+  }
 
-    if (!existing) {
-      columns[xColumn] = {
-        firstTime: point.time,
-        lastTime: point.time,
-        firstValue: point.value,
-        lastValue: point.value,
-        sum: point.value,
-        count: 1
-      };
-    } else {
-      existing.lastTime = point.time;
-      existing.lastValue = point.value;
-      existing.sum += point.value;
-      existing.count += 1;
+  const points = [];
+  for (let x = 0; x < cols.length; x += 1) {
+    const value = cols[x];
+    if (value !== null) {
+      points.push({
+        x: x + 1,
+        value
+      });
     }
   }
 
-  // Convert bins back to plotted points.
-  // Use the last value in the column to preserve the freshest trace shape.
-  const plotted = [];
-  for (let x = 0; x < columns.length; x += 1) {
-    const col = columns[x];
-    if (!col) continue;
+  return points;
+}
 
-    plotted.push({
-      x: x + 1,
-      value: col.lastValue
-    });
+// Cohen–Sutherland line clipping
+const INSIDE = 0;
+const LEFT = 1;
+const RIGHT = 2;
+const BOTTOM = 4;
+const TOP = 8;
+
+function computeOutCode(x, y, xmin, ymin, xmax, ymax) {
+  let code = INSIDE;
+
+  if (x < xmin) code |= LEFT;
+  else if (x > xmax) code |= RIGHT;
+
+  if (y < ymin) code |= TOP;
+  else if (y > ymax) code |= BOTTOM;
+
+  return code;
+}
+
+/**
+ * Clip a line segment to the plot rectangle.
+ * Important behaviour:
+ * - If both endpoints are above the plot, the segment is rejected entirely
+ *   instead of drawing a smear along the top.
+ * - Same for below/left/right.
+ * This is what removes top/bottom boundary smears.
+ */
+function clipSegment(x0, y0, x1, y1, xmin, ymin, xmax, ymax) {
+  let outCode0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+  let outCode1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+
+  while (true) {
+    if (!(outCode0 | outCode1)) {
+      // Both inside
+      return { x0, y0, x1, y1 };
+    }
+
+    if (outCode0 & outCode1) {
+      // Both endpoints share an outside region -> fully invisible
+      return null;
+    }
+
+    const outCodeOut = outCode0 ? outCode0 : outCode1;
+    let x;
+    let y;
+
+    if (outCodeOut & TOP) {
+      x = x0 + ((x1 - x0) * (ymin - y0)) / (y1 - y0);
+      y = ymin;
+    } else if (outCodeOut & BOTTOM) {
+      x = x0 + ((x1 - x0) * (ymax - y0)) / (y1 - y0);
+      y = ymax;
+    } else if (outCodeOut & RIGHT) {
+      y = y0 + ((y1 - y0) * (xmax - x0)) / (x1 - x0);
+      x = xmax;
+    } else {
+      y = y0 + ((y1 - y0) * (xmin - x0)) / (x1 - x0);
+      x = xmin;
+    }
+
+    if (outCodeOut === outCode0) {
+      x0 = x;
+      y0 = y;
+      outCode0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+    } else {
+      x1 = x;
+      y1 = y;
+      outCode1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+    }
   }
-
-  return plotted;
 }
 
 function drawSeries(ctx, entries, color, yMin, yMax, valueAccessor) {
@@ -255,35 +301,70 @@ function drawSeries(ctx, entries, color, yMin, yMax, valueAccessor) {
   const range = yMax - yMin;
   const toY = (value) => height - ((value - yMin) / range) * height;
 
-  const points = buildVisiblePoints(entries, width, valueAccessor);
+  const visibleSamples = buildVisibleSamples(entries, valueAccessor);
+  const points = samplesToPlotPoints(visibleSamples, width);
   if (points.length < 2) return;
 
+  const xmin = 1;
+  const xmax = Math.max(1, width - 1);
+  const ymin = 0;
+  const ymax = height;
+
   ctx.save();
-
-  // Clip horizontally only.
-  // This allows peaks to run off top/bottom naturally instead of flattening.
-  ctx.beginPath();
-  ctx.rect(1, 0, Math.max(1, width - 2), height);
-  ctx.clip();
-
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  ctx.beginPath();
 
-  for (let i = 0; i < points.length; i += 1) {
-    const x = points[i].x;
-    const y = toY(points[i].value);
+  let pathOpen = false;
 
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const curr = points[i];
+
+    const x0 = prev.x;
+    const y0 = toY(prev.value);
+    const x1 = curr.x;
+    const y1 = toY(curr.value);
+
+    const clipped = clipSegment(x0, y0, x1, y1, xmin, ymin, xmax, ymax);
+
+    if (!clipped) {
+      if (pathOpen) {
+        ctx.stroke();
+        pathOpen = false;
+      }
+      continue;
     }
+
+    if (!pathOpen) {
+      ctx.beginPath();
+      ctx.moveTo(clipped.x0, clipped.y0);
+      ctx.lineTo(clipped.x1, clipped.y1);
+      pathOpen = true;
+    } else {
+      // If segment does not continue exactly from the previous point, start a new path
+      const currentPoint = ctx.__lastPoint;
+      if (
+        !currentPoint ||
+        Math.abs(currentPoint.x - clipped.x0) > 0.01 ||
+        Math.abs(currentPoint.y - clipped.y0) > 0.01
+      ) {
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(clipped.x0, clipped.y0);
+      }
+      ctx.lineTo(clipped.x1, clipped.y1);
+    }
+
+    ctx.__lastPoint = { x: clipped.x1, y: clipped.y1 };
   }
 
-  ctx.stroke();
+  if (pathOpen) {
+    ctx.stroke();
+  }
+
+  ctx.__lastPoint = null;
   ctx.restore();
 }
 
@@ -425,7 +506,7 @@ window.addEventListener(
 
     data.push(entry);
 
-    // Keep memory bounded without affecting saved fidelity too early
+    // Keep memory bounded without changing export fidelity too quickly
     if (data.length > MAX_BUFFER_POINTS) {
       data.splice(0, data.length - MAX_BUFFER_POINTS);
     }
