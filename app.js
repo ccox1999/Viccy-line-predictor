@@ -20,8 +20,8 @@ const gyroCanvas = document.getElementById("gyroChart");
 const gyroCtx = gyroCanvas.getContext("2d", { alpha: false });
 
 // Display settings
-const TIME_WINDOW_MS = 8000; // last 8 seconds visible
-const MAX_BUFFER_POINTS = 12000; // keep plenty of raw points for save/export
+const TIME_WINDOW_MS = 8000;     // visible time span
+const MAX_BUFFER_POINTS = 20000; // raw history kept for save/export
 
 function getDpr() {
   return window.devicePixelRatio || 1;
@@ -30,7 +30,7 @@ function getDpr() {
 function resizeCanvas(canvas, ctx) {
   const dpr = getDpr();
 
-  // offsetWidth/offsetHeight are more stable than getBoundingClientRect on iPhone Safari
+  // More stable on iPhone Safari than getBoundingClientRect()
   const cssWidth = Math.max(1, canvas.offsetWidth);
   const cssHeight = Math.max(1, canvas.offsetHeight);
 
@@ -44,7 +44,7 @@ function resizeCanvas(canvas, ctx) {
     canvas.style.height = `${cssHeight}px`;
   }
 
-  // Draw using CSS-pixel coordinates over a Retina backing store
+  // Draw in CSS pixels over a high-res backing store
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
 }
@@ -117,7 +117,7 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
     ctx.fillText(labelFn(value), 8, y);
   }
 
-  // Stronger zero line
+  // Stronger zero axis
   const zeroY = toY(0);
   if (zeroY >= 0 && zeroY <= height) {
     ctx.strokeStyle = "#3a415a";
@@ -130,67 +130,138 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.restore();
 }
 
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 /**
- * Build one plotted point per horizontal pixel column using timestamps.
- * This removes:
- * - right-edge smear (multiple points in the same x column)
- * - left-edge wobble caused by remapping a sliding sample window by index
+ * Build plotted points for a rolling time window.
  *
- * We do NOT clamp values vertically.
+ * Key left-edge fix:
+ * - Insert an interpolated point exactly at windowStart if the window cuts
+ *   through a segment. This stops the first visible point from "jumping"
+ *   as old data exits the left edge.
+ *
+ * Key right-edge fix:
+ * - Bin to one point per pixel column.
+ *
+ * Key clipping behaviour:
+ * - No y clamping. Values above/below the range are allowed to run outside
+ *   the plot vertically.
  */
-function binSeriesByTime(entries, width, valueAccessor) {
-  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset on both sides
-  if (!entries.length) return [];
+function buildVisiblePoints(entries, width, valueAccessor) {
+  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset both sides
+  if (entries.length < 2) return [];
 
   const latestTime = entries[entries.length - 1].time;
   const windowStart = latestTime - TIME_WINDOW_MS;
+  const windowEnd = latestTime;
 
-  // Keep only samples inside the visible time window
-  const visible = entries.filter((entry) => entry.time >= windowStart);
-  if (!visible.length) return [];
-
-  const columns = new Array(plotWidth).fill(null);
-
-  for (const entry of visible) {
-    const progress = (entry.time - windowStart) / TIME_WINDOW_MS;
-    const clampedProgress = Math.max(0, Math.min(1, progress));
-    const xColumn = Math.min(
-      plotWidth - 1,
-      Math.floor(clampedProgress * (plotWidth - 1))
-    );
-
-    // Keep the latest sample for each pixel column
-    columns[xColumn] = valueAccessor(entry);
+  // Find first sample with time >= windowStart
+  let firstVisibleIndex = entries.findIndex((e) => e.time >= windowStart);
+  if (firstVisibleIndex === -1) {
+    // All points are older than the window
+    return [];
   }
 
-  const points = [];
-  for (let x = 0; x < columns.length; x += 1) {
-    const value = columns[x];
-    if (value !== null) {
-      points.push({
-        x: x + 1, // 1px inset
-        value
+  const visiblePoints = [];
+
+  // ---- LEFT BOUNDARY INTERPOLATION ----
+  // If windowStart falls between two samples, create a synthetic point exactly
+  // at x = left edge. This removes the outgoing-edge wobble/spike.
+  if (firstVisibleIndex > 0) {
+    const prev = entries[firstVisibleIndex - 1];
+    const next = entries[firstVisibleIndex];
+
+    if (prev.time < windowStart && next.time > windowStart) {
+      const t = (windowStart - prev.time) / (next.time - prev.time);
+      const interpolatedValue = lerp(valueAccessor(prev), valueAccessor(next), t);
+      visiblePoints.push({
+        time: windowStart,
+        value: interpolatedValue
+      });
+    }
+  } else if (entries[0].time >= windowStart) {
+    // Window starts before the first sample: pin the first real sample
+    visiblePoints.push({
+      time: entries[0].time,
+      value: valueAccessor(entries[0])
+    });
+  }
+
+  // Add all real samples inside the visible time window
+  for (let i = firstVisibleIndex; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (entry.time > windowEnd) break;
+    if (entry.time >= windowStart) {
+      visiblePoints.push({
+        time: entry.time,
+        value: valueAccessor(entry)
       });
     }
   }
 
-  return points;
+  if (visiblePoints.length < 2) return [];
+
+  // Bin to one point per pixel column
+  const columns = new Array(plotWidth).fill(null);
+
+  for (const point of visiblePoints) {
+    const progress = (point.time - windowStart) / TIME_WINDOW_MS;
+    const xColumn = Math.min(
+      plotWidth - 1,
+      Math.max(0, Math.floor(progress * (plotWidth - 1)))
+    );
+
+    const existing = columns[xColumn];
+
+    if (!existing) {
+      columns[xColumn] = {
+        firstTime: point.time,
+        lastTime: point.time,
+        firstValue: point.value,
+        lastValue: point.value,
+        sum: point.value,
+        count: 1
+      };
+    } else {
+      existing.lastTime = point.time;
+      existing.lastValue = point.value;
+      existing.sum += point.value;
+      existing.count += 1;
+    }
+  }
+
+  // Convert bins back to plotted points.
+  // Use the last value in the column to preserve the freshest trace shape.
+  const plotted = [];
+  for (let x = 0; x < columns.length; x += 1) {
+    const col = columns[x];
+    if (!col) continue;
+
+    plotted.push({
+      x: x + 1,
+      value: col.lastValue
+    });
+  }
+
+  return plotted;
 }
 
 function drawSeries(ctx, entries, color, yMin, yMax, valueAccessor) {
-  if (!entries.length) return;
+  if (entries.length < 2) return;
 
   const { width, height } = getCanvasSize(ctx);
   const range = yMax - yMin;
   const toY = (value) => height - ((value - yMin) / range) * height;
 
-  const points = binSeriesByTime(entries, width, valueAccessor);
+  const points = buildVisiblePoints(entries, width, valueAccessor);
   if (points.length < 2) return;
 
   ctx.save();
 
-  // Clip horizontally so traces do not bleed into the borders.
-  // We do NOT clamp y, so peaks can run naturally off the top/bottom.
+  // Clip horizontally only.
+  // This allows peaks to run off top/bottom naturally instead of flattening.
   ctx.beginPath();
   ctx.rect(1, 0, Math.max(1, width - 2), height);
   ctx.clip();
@@ -221,57 +292,15 @@ function renderCharts() {
   drawAxes(accelCtx, -4, 4, 1, (value) => `${value.toFixed(1)} g`);
   drawAxes(gyroCtx, -360, 360, 90, (value) => `${value.toFixed(0)}°/s`);
 
-  if (data.length === 0) return;
+  if (data.length < 2) return;
 
-  drawSeries(
-    accelCtx,
-    data,
-    "#ff375f",
-    -4,
-    4,
-    (entry) => entry.ax / 9.81
-  );
-  drawSeries(
-    accelCtx,
-    data,
-    "#32d74b",
-    -4,
-    4,
-    (entry) => entry.ay / 9.81
-  );
-  drawSeries(
-    accelCtx,
-    data,
-    "#64d2ff",
-    -4,
-    4,
-    (entry) => entry.az / 9.81
-  );
+  drawSeries(accelCtx, data, "#ff375f", -4, 4, (entry) => entry.ax / 9.81);
+  drawSeries(accelCtx, data, "#32d74b", -4, 4, (entry) => entry.ay / 9.81);
+  drawSeries(accelCtx, data, "#64d2ff", -4, 4, (entry) => entry.az / 9.81);
 
-  drawSeries(
-    gyroCtx,
-    data,
-    "#ffd60a",
-    -360,
-    360,
-    (entry) => entry.rotationAlpha
-  );
-  drawSeries(
-    gyroCtx,
-    data,
-    "#ff9f0a",
-    -360,
-    360,
-    (entry) => entry.rotationBeta
-  );
-  drawSeries(
-    gyroCtx,
-    data,
-    "#bf5af2",
-    -360,
-    360,
-    (entry) => entry.rotationGamma
-  );
+  drawSeries(gyroCtx, data, "#ffd60a", -360, 360, (entry) => entry.rotationAlpha);
+  drawSeries(gyroCtx, data, "#ff9f0a", -360, 360, (entry) => entry.rotationBeta);
+  drawSeries(gyroCtx, data, "#bf5af2", -360, 360, (entry) => entry.rotationGamma);
 }
 
 function updateSessionInfo() {
@@ -396,7 +425,7 @@ window.addEventListener(
 
     data.push(entry);
 
-    // Keep raw buffer bounded in memory, but still large
+    // Keep memory bounded without affecting saved fidelity too early
     if (data.length > MAX_BUFFER_POINTS) {
       data.splice(0, data.length - MAX_BUFFER_POINTS);
     }
