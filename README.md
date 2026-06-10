@@ -1,50 +1,29 @@
+# Victoria Line Motion Lab
 
-# Victoria Line Branch Predictor
+A lightweight, mobile-first web app for recording and visualising device motion data (acceleration and rotation) in real time. Designed with an iOS-native feel, this tool is ideal for motion experiments, transport analysis, or sensor data exploration.
 
-This is a lightweight iPhone-compatible web app / PWA that:
+## ✨ Features
 
-- Uses accelerometer + gyroscope data
-- Records motion between Stockwell and Brixton
-- Predicts whether the train took the left or right branch
+- 📱 iPhone motion sensor support (DeviceMotion API)
+- 📊 Live acceleration and rotation charts
+- 🎛 Recording controls with session stats
+- 💾 Export recordings as JSON
+- 🎨 iOS-style dark UI
 
-## How to use
+## 🚀 Getting Started
 
-1. Upload the folder to:
-   - GitHub Pages
-   - Netlify
-   - Vercel
+1. Open `index.html` in a mobile browser (Safari recommended)
+2. Enable motion sensors
+3. Start recording and move your device
 
-2. Open in Safari on iPhone
+## 📂 Project Structure
 
-3. Tap:
-   - Enable Motion Sensors
-   - Start Recording
+- `index.html` – UI layout
+- `style.css` – styling
+- `app.js` – app logic and charts
+- `manifest.json` – PWA config
 
-4. Ride the Victoria line between Stockwell and Brixton
+## ⚠️ Notes
 
-5. Stop recording and export the JSON
-
-6. Label datasets:
-   - left-branch
-   - right-branch
-
-7. Train a better model later using:
-   - TensorFlow.js
-   - Python/scikit-learn
-
-## Why this works
-
-The tunnel geometry and switching curve produce slightly different:
-- lateral acceleration
-- rotational movement
-- vibration signatures
-
-Modern iPhones can detect this surprisingly well.
-
-## Next upgrade ideas
-
-- Add CoreML-style classifier in browser
-- Use TensorFlow.js
-- Live confidence graph
-- GPS fallback above ground
-- Apple Watch sensor fusion
+- Requires HTTPS on most devices
+- Works best on iPhone (iOS 13+)
