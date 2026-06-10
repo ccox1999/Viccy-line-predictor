@@ -91,7 +91,8 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.strokeStyle = "#242838";
   ctx.fillStyle = "#9aa0b5";
   ctx.lineWidth = 1;
-  ctx.font = "10px -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+  const dpr = window.devicePixelRatio || 1;
+  ctx.font = `${10 / dpr}px -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
 
