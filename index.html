@@ -2,19 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+  >
   <title>Victoria Line Motion Lab</title>
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
   <div class="app-shell">
     <header class="app-header">
       <h1>Victoria Line Motion Lab</h1>
       <p class="subtitle">
         Record iPhone motion data and visualise accelerations and rotations
-        with a native‑feeling iOS interface.
+        with a native-feeling iOS interface.
       </p>
     </header>
 
@@ -27,7 +28,6 @@
         <button id="sensorBtn" class="btn btn-primary">
           Enable Motion Sensors
         </button>
-
         <button id="recordBtn" class="btn btn-secondary" disabled>
           Start Recording
         </button>
@@ -37,7 +37,6 @@
         <button id="saveBtn" class="btn btn-outline" disabled>
           Save Recording (JSON)
         </button>
-
         <button id="clearBtn" class="btn btn-outline" disabled>
           Clear Data
         </button>
@@ -49,6 +48,7 @@
         <div class="status-title">Session status</div>
         <div id="sessionState" class="status-value">Idle</div>
       </div>
+
       <div class="status-body">
         <div class="status-row">
           <span>Total samples</span>
