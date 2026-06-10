@@ -2,66 +2,89 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Victoria Line Predictor</title>
-  <link rel="manifest" href="manifest.json">
-
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      margin: 20px;
-      background: #111;
-      color: #fff;
-    }
-    button {
-      padding: 14px 20px;
-      font-size: 16px;
-      border-radius: 12px;
-      border: none;
-      margin: 10px 0;
-      background: #444;
-      color: white;
-    }
-    #status {
-      margin-top: 20px;
-      padding: 14px;
-      background: #222;
-      border-radius: 12px;
-    }
-    .big {
-      font-size: 26px;
-      font-weight: bold;
-    }
-    canvas {
-      width: 100%;
-      height: 200px;
-      background: #222;
-      border-radius: 12px;
-      margin-top: 20px;
-    }
-  </style>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Victoria Line Motion Lab</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-  <h1>Victoria Line Predictor</h1>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>Victoria Line Motion Lab</h1>
+      <p class="subtitle">
+        Record iPhone motion data and visualise accelerations and rotations
+        like a native iOS app.
+      </p>
+    </header>
 
-  <p>
-    This app uses your iPhone motion sensors to predict whether the train
-    takes the left or right track between Stockwell and Brixton.
-  </p>
+    <section class="card controls-card">
+      <div id="sensorStatus" class="status-pill status-pill--pending">
+        Motion permission: Not requested
+      </div>
 
-  <button id="startBtn">Enable Motion Sensors</button>
-  <button id="recordBtn">Start Recording</button>
-  <button id="predictBtn">Predict Branch</button>
+      <div class="controls-row">
+        <button id="sensorBtn" class="btn btn-primary">
+          Enable Motion Sensors
+        </button>
 
-  <div id="status">
-    <div class="big" id="prediction">Waiting...</div>
-    <div id="details"></div>
+        <button id="recordBtn" class="btn btn-secondary" disabled>
+          Start Recording
+        </button>
+      </div>
+
+      <div class="controls-row">
+        <button id="saveBtn" class="btn btn-outline" disabled>
+          Save Recording (JSON)
+        </button>
+
+        <button id="clearBtn" class="btn btn-outline" disabled>
+          Clear Data
+        </button>
+      </div>
+    </section>
+
+    <section class="card status-card">
+      <div class="status-header">
+        <div class="status-title">Session status</div>
+        <div id="sessionState" class="status-value">Idle</div>
+      </div>
+      <div class="status-body">
+        <div class="status-row">
+          <span>Total samples</span>
+          <span id="sampleCount">0</span>
+        </div>
+        <div class="status-row">
+          <span>Duration</span>
+          <span id="duration">0.0 s</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Acceleration (g)</div>
+        <div class="chart-legend">
+          <span class="legend-dot legend-dot--ax"></span> ax
+          <span class="legend-dot legend-dot--ay"></span> ay
+          <span class="legend-dot legend-dot--az"></span> az
+        </div>
+      </div>
+      <canvas id="accelChart"></canvas>
+    </section>
+
+    <section class="card chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Rotation (°/s)</div>
+        <div class="chart-legend">
+          <span class="legend-dot legend-dot--alpha"></span> α
+          <span class="legend-dot legend-dot--beta"></span> β
+          <span class="legend-dot legend-dot--gamma"></span> γ
+        </div>
+      </div>
+      <canvas id="gyroChart"></canvas>
+    </section>
   </div>
-
-  <!-- ⭐ Live graphs -->
-  <canvas id="accelChart"></canvas>
-  <canvas id="gyroChart"></canvas>
 
   <script src="app.js"></script>
 </body>
