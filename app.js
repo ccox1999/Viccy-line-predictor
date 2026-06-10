@@ -21,15 +21,19 @@ const gyroCtx = gyroCanvas.getContext("2d");
 const MAX_POINTS = 300;
 
 function resizeCanvas(canvas, ctx) {
-  const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
 
-  canvas.width = Math.round(rect.width * dpr);
-  canvas.height = Math.round(rect.height * dpr);
-  canvas.style.width = `${rect.width}px`;
-  canvas.style.height = `${rect.height}px`;
+  // More stable on iPhone Safari than getBoundingClientRect()
+  const width = canvas.offsetWidth;
+  const height = canvas.offsetHeight;
 
-  // Draw in CSS pixels while keeping Retina sharpness.
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  // Draw using CSS-pixel coordinates while keeping a high-res backing store
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
 }
@@ -41,6 +45,15 @@ function resizeAllCanvases() {
 }
 
 window.addEventListener("resize", resizeAllCanvases);
+
+// iPhone Safari often finalises layout after initial JS execution
+window.addEventListener("load", () => {
+  setTimeout(resizeAllCanvases, 100);
+});
+
+window.addEventListener("orientationchange", () => {
+  setTimeout(resizeAllCanvases, 150);
+});
 
 function getCanvasSize(ctx) {
   return {
@@ -74,7 +87,6 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, width, height);
 
-  // Grid + labels
   ctx.save();
   ctx.strokeStyle = "#242838";
   ctx.fillStyle = "#9aa0b5";
@@ -91,11 +103,10 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
     ctx.lineTo(width, y);
     ctx.stroke();
 
-    const label = labelFn(value);
-    ctx.fillText(label, 8, y);
+    ctx.fillText(labelFn(value), 8, y);
   }
 
-  // Stronger zero line
+  // Slightly stronger zero line
   const zeroY = toY(0);
   if (zeroY >= 0 && zeroY <= height) {
     ctx.strokeStyle = "#3a415a";
@@ -139,9 +150,10 @@ function drawSeries(ctx, values, color, yMin, yMax) {
   ctx.restore();
 }
 
+// Render charts
 function renderCharts() {
-  // Fixed chart scales requested:
-  // Acceleration: -4g to +4g in 1g increments
+  // Fixed requested scales:
+  // Acceleration: -4g to +4g in 1.0g increments
   // Rotation: -360°/s to +360°/s in 90°/s increments
   drawAxes(accelCtx, -4, 4, 1, (value) => `${value.toFixed(1)} g`);
   drawAxes(gyroCtx, -360, 360, 90, (value) => `${value.toFixed(0)}°/s`);
@@ -180,6 +192,7 @@ function updateSessionInfo() {
   durationEl.textContent = `${seconds.toFixed(1)} s`;
 }
 
+// Motion permission
 sensorBtn.onclick = async () => {
   try {
     if (
@@ -210,18 +223,22 @@ sensorBtn.onclick = async () => {
   }
 };
 
+// Start/stop recording
 recordBtn.onclick = () => {
   recording = !recording;
 
   if (recording) {
     data = [];
     startTime = Date.now();
+
     recordBtn.textContent = "Stop Recording";
     recordBtn.classList.remove("btn-secondary");
     recordBtn.classList.add("btn-primary");
+
     sessionState.textContent = "Recording…";
     saveBtn.disabled = true;
     clearBtn.disabled = true;
+
     updateSessionInfo();
     renderCharts();
     return;
@@ -230,11 +247,13 @@ recordBtn.onclick = () => {
   recordBtn.textContent = "Start Recording";
   recordBtn.classList.remove("btn-primary");
   recordBtn.classList.add("btn-secondary");
+
   sessionState.textContent = data.length ? "Recorded" : "Idle";
   saveBtn.disabled = data.length === 0;
   clearBtn.disabled = data.length === 0;
 };
 
+// Save recording as JSON
 saveBtn.onclick = () => {
   if (!data.length) return;
 
@@ -246,12 +265,14 @@ saveBtn.onclick = () => {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `motion-recording-${Date.now()}.json`;
+
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 };
 
+// Clear data
 clearBtn.onclick = () => {
   data = [];
   startTime = null;
@@ -262,6 +283,7 @@ clearBtn.onclick = () => {
   renderCharts();
 };
 
+// Capture motion
 window.addEventListener("devicemotion", (event) => {
   if (!recording) return;
 
