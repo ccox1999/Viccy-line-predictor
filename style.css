@@ -32,7 +32,6 @@ body {
   padding: 16px;
 }
 
-/* Header */
 .app-header h1 {
   margin: 0;
   font-size: 22px;
@@ -44,7 +43,6 @@ body {
   color: var(--text-muted);
 }
 
-/* Cards */
 .card {
   background: var(--card-bg);
   border-radius: 18px;
@@ -53,7 +51,6 @@ body {
   border: 1px solid var(--border);
 }
 
-/* Controls */
 .controls-row {
   display: flex;
   gap: 8px;
@@ -102,22 +99,34 @@ body {
 
 .icon-legend {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .legend-item {
-  width: 22px;
-  height: 22px;
-  opacity: 0.9;
+  width: 24px;
+  height: 24px;
+  opacity: 0.95;
 }
 
 .legend-item svg {
   width: 100%;
   height: 100%;
+}
+
+/* ✅ FIX — apply styling to ALL SVG shapes */
+.legend-item svg * {
   stroke: currentColor;
-  fill: none;
   stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* ✅ FIX — Z axis arrows need fill */
+.legend-item.az polygon {
+  fill: currentColor;
+  stroke: none;
 }
 
 /* Colours */
@@ -129,8 +138,6 @@ body {
 .legend-item.beta { color: var(--beta); }
 .legend-item.gamma { color: var(--gamma); }
 
-/* Canvas */
-
 canvas {
   width: 100%;
   height: 220px;
@@ -138,8 +145,6 @@ canvas {
   background: #05060a;
   border: 1px solid #1f2230;
 }
-
-/* Status */
 
 .status-pill {
   font-size: 12px;
