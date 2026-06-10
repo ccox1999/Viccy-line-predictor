@@ -127,18 +127,19 @@ body {
   font-weight: 600;
 }
 
-/* Icons */
+/* ✅ ICON LEGEND (IMPROVED LOOK) */
 
 .icon-legend {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
 .legend-item {
-  width: 24px;
-  height: 24px;
-  opacity: 0.95;
+  width: 22px;
+  height: 22px;
+  opacity: 0.9;
+  transform: translateY(1px); /* aligns optically */
 }
 
 .legend-item svg {
@@ -146,14 +147,21 @@ body {
   height: 100%;
 }
 
+/* Apply to ALL shapes */
 .legend-item svg * {
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.4;            /* thinner = iOS style */
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
 }
 
+/* ✅ Phone outline refinement */
+.legend-item rect {
+  stroke-width: 1.6;
+}
+
+/* ✅ Z axis arrows (filled triangles) */
 .legend-item.az polygon {
   fill: currentColor;
   stroke: none;
