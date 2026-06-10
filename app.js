@@ -19,8 +19,9 @@ const accelCtx = accelCanvas.getContext("2d", { alpha: false });
 const gyroCanvas = document.getElementById("gyroChart");
 const gyroCtx = gyroCanvas.getContext("2d", { alpha: false });
 
-// Keep a larger buffer so the plot can scroll smoothly on dense data
-const MAX_POINTS = 1500;
+// Display settings
+const TIME_WINDOW_MS = 8000; // last 8 seconds visible
+const MAX_BUFFER_POINTS = 12000; // keep plenty of raw points for save/export
 
 function getDpr() {
   return window.devicePixelRatio || 1;
@@ -83,47 +84,6 @@ function crisp(v) {
   return Math.round(v) + 0.5;
 }
 
-/**
- * Map values into horizontal pixel columns.
- * Each column gets one value only, so we avoid:
- * - the right-edge smear / ghost bar
- * - jitter from multiple samples stacking into one x position
- *
- * We use the last value that lands in each column so the trace feels current.
- */
-function binSeriesToColumns(values, width) {
-  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset both sides
-  const clipped = values.slice(-MAX_POINTS);
-
-  if (clipped.length === 0) return [];
-  if (clipped.length === 1) {
-    return [{ x: 1, value: clipped[0] }];
-  }
-
-  const columns = new Array(plotWidth).fill(null);
-
-  for (let i = 0; i < clipped.length; i += 1) {
-    const x = Math.min(
-      plotWidth - 1,
-      Math.floor((i / (clipped.length - 1)) * (plotWidth - 1))
-    );
-    columns[x] = clipped[i];
-  }
-
-  const points = [];
-  for (let x = 0; x < columns.length; x += 1) {
-    const value = columns[x];
-    if (value !== null) {
-      points.push({
-        x: x + 1, // leave a 1px inset
-        value
-      });
-    }
-  }
-
-  return points;
-}
-
 function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   const { width, height } = getCanvasSize(ctx);
   const range = yMax - yMin;
@@ -136,7 +96,6 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.fillRect(0, 0, width, height);
 
   const dpr = getDpr();
-  // Smaller labels on high-DPI iPhones
   const fontPx = dpr >= 3 ? 7.5 : dpr >= 2 ? 8.5 : 10;
 
   ctx.save();
@@ -171,21 +130,69 @@ function drawAxes(ctx, yMin, yMax, majorStep, labelFn) {
   ctx.restore();
 }
 
-function drawSeries(ctx, values, color, yMin, yMax) {
-  if (!values.length) return;
+/**
+ * Build one plotted point per horizontal pixel column using timestamps.
+ * This removes:
+ * - right-edge smear (multiple points in the same x column)
+ * - left-edge wobble caused by remapping a sliding sample window by index
+ *
+ * We do NOT clamp values vertically.
+ */
+function binSeriesByTime(entries, width, valueAccessor) {
+  const plotWidth = Math.max(2, Math.floor(width - 2)); // 1px inset on both sides
+  if (!entries.length) return [];
+
+  const latestTime = entries[entries.length - 1].time;
+  const windowStart = latestTime - TIME_WINDOW_MS;
+
+  // Keep only samples inside the visible time window
+  const visible = entries.filter((entry) => entry.time >= windowStart);
+  if (!visible.length) return [];
+
+  const columns = new Array(plotWidth).fill(null);
+
+  for (const entry of visible) {
+    const progress = (entry.time - windowStart) / TIME_WINDOW_MS;
+    const clampedProgress = Math.max(0, Math.min(1, progress));
+    const xColumn = Math.min(
+      plotWidth - 1,
+      Math.floor(clampedProgress * (plotWidth - 1))
+    );
+
+    // Keep the latest sample for each pixel column
+    columns[xColumn] = valueAccessor(entry);
+  }
+
+  const points = [];
+  for (let x = 0; x < columns.length; x += 1) {
+    const value = columns[x];
+    if (value !== null) {
+      points.push({
+        x: x + 1, // 1px inset
+        value
+      });
+    }
+  }
+
+  return points;
+}
+
+function drawSeries(ctx, entries, color, yMin, yMax, valueAccessor) {
+  if (!entries.length) return;
 
   const { width, height } = getCanvasSize(ctx);
   const range = yMax - yMin;
   const toY = (value) => height - ((value - yMin) / range) * height;
 
-  const points = binSeriesToColumns(values, width);
+  const points = binSeriesByTime(entries, width, valueAccessor);
   if (points.length < 2) return;
 
   ctx.save();
 
-  // Clip inside the chart so nothing paints into borders/right edge
+  // Clip horizontally so traces do not bleed into the borders.
+  // We do NOT clamp y, so peaks can run naturally off the top/bottom.
   ctx.beginPath();
-  ctx.rect(1, 1, Math.max(1, width - 2), Math.max(1, height - 2));
+  ctx.rect(1, 0, Math.max(1, width - 2), height);
   ctx.clip();
 
   ctx.strokeStyle = color;
@@ -210,27 +217,61 @@ function drawSeries(ctx, values, color, yMin, yMax) {
 }
 
 function renderCharts() {
-  // Fixed requested scales
+  // Fixed display scales requested
   drawAxes(accelCtx, -4, 4, 1, (value) => `${value.toFixed(1)} g`);
   drawAxes(gyroCtx, -360, 360, 90, (value) => `${value.toFixed(0)}°/s`);
 
   if (data.length === 0) return;
 
-  const ax = data.map((d) => d.ax / 9.81);
-  const ay = data.map((d) => d.ay / 9.81);
-  const az = data.map((d) => d.az / 9.81);
+  drawSeries(
+    accelCtx,
+    data,
+    "#ff375f",
+    -4,
+    4,
+    (entry) => entry.ax / 9.81
+  );
+  drawSeries(
+    accelCtx,
+    data,
+    "#32d74b",
+    -4,
+    4,
+    (entry) => entry.ay / 9.81
+  );
+  drawSeries(
+    accelCtx,
+    data,
+    "#64d2ff",
+    -4,
+    4,
+    (entry) => entry.az / 9.81
+  );
 
-  const alpha = data.map((d) => d.rotationAlpha);
-  const beta = data.map((d) => d.rotationBeta);
-  const gamma = data.map((d) => d.rotationGamma);
-
-  drawSeries(accelCtx, ax, "#ff375f", -4, 4);
-  drawSeries(accelCtx, ay, "#32d74b", -4, 4);
-  drawSeries(accelCtx, az, "#64d2ff", -4, 4);
-
-  drawSeries(gyroCtx, alpha, "#ffd60a", -360, 360);
-  drawSeries(gyroCtx, beta, "#ff9f0a", -360, 360);
-  drawSeries(gyroCtx, gamma, "#bf5af2", -360, 360);
+  drawSeries(
+    gyroCtx,
+    data,
+    "#ffd60a",
+    -360,
+    360,
+    (entry) => entry.rotationAlpha
+  );
+  drawSeries(
+    gyroCtx,
+    data,
+    "#ff9f0a",
+    -360,
+    360,
+    (entry) => entry.rotationBeta
+  );
+  drawSeries(
+    gyroCtx,
+    data,
+    "#bf5af2",
+    -360,
+    360,
+    (entry) => entry.rotationGamma
+  );
 }
 
 function updateSessionInfo() {
@@ -307,7 +348,7 @@ recordBtn.onclick = () => {
   clearBtn.disabled = data.length === 0;
 };
 
-// Save recording as JSON
+// Save recording as JSON (raw data, not display-clipped)
 saveBtn.onclick = () => {
   if (!data.length) return;
 
@@ -354,6 +395,12 @@ window.addEventListener(
     };
 
     data.push(entry);
+
+    // Keep raw buffer bounded in memory, but still large
+    if (data.length > MAX_BUFFER_POINTS) {
+      data.splice(0, data.length - MAX_BUFFER_POINTS);
+    }
+
     updateSessionInfo();
     queueRender();
   },
@@ -362,4 +409,3 @@ window.addEventListener(
 
 updateSessionInfo();
 resizeAllCanvases();
-``
